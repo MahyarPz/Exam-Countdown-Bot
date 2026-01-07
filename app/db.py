@@ -3,7 +3,7 @@
 import logging
 import sqlite3
 from contextlib import contextmanager
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from app.config import Config
 
@@ -214,37 +214,12 @@ def get_exam_by_id(exam_id: int, user_id: int) -> Optional[Dict[str, Any]]:
         if Config.use_postgres():
             cursor.execute(
                 "SELECT * FROM exams WHERE id = %s AND user_id = %s",
-                (exam_id, user_id)
+                (exam_id, user_id),
             )
         else:
             cursor.execute(
                 "SELECT * FROM exams WHERE id = ? AND user_id = ?",
-                (exam_id, user_id)
-            cursor.execute(
-            "SELECT * FROM exams WHERE user_id = ? ORDER BY exam_datetime_iso",
-            (user_id,)
-        )
-        return [dict(row) for row in cursor.fetchall()]
-
-
-def delete_exam(exam_id: int, user_id: int) -> bool:
-    """Delete an exam (only if it belongs to the user)."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "DELETE FROM exams WHERE id = ? AND user_id = ?",
-            (exam_id, user_id)
-        )
-        return cursor.rowcount > 0
-
-
-def get_exam_by_id(exam_id: int, user_id: int) -> Optional[Dict[str, Any]]:
-    """Get a specific exam by ID (only if it belongs to the user)."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM exams WHERE id = ? AND user_id = ?",
-            (exam_id, user_id)
-        )
+                (exam_id, user_id),
+            )
         row = cursor.fetchone()
-        return dict(row) if row else None
+        return _dict_row(row) if row else None
