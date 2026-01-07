@@ -1,0 +1,147 @@
+"""Main entry point for the Exam Countdown Bot."""
+
+import logging
+import sys
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters
+)
+from app.config import Config
+from app import db
+from app.handlers import (
+    cmd_start,
+    cmd_menu,
+    cmd_help,
+    cmd_add,
+    cmd_list,
+    cmd_delete,
+    cmd_settime,
+    cmd_timezone,
+    btn_delete_exam,
+    btn_set_time,
+    btn_set_timezone,
+    callback_refresh_list,
+    callback_notify_now,
+    callback_delete_exam,
+    handle_time_input,
+    handle_timezone_input
+)
+from app.conversations import get_add_exam_conversation_handler
+from app.scheduler import schedule_all_users
+
+# Configure logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('bot.log')
+    ]
+)
+logger = logging.getLogger(__name__)
+
+
+def main() -> None:
+    """Start the bot."""
+    try:
+        # Initialize database
+        db.init_db()
+        if Config.use_postgres():
+            logger.info("Using PostgreSQL database")
+        else:
+            logger.info("Using SQLite database")
+        
+        # Create application
+        application = Application.builder().token(Config.BOT_TOKEN).build()
+        
+        # Add conversation handler for Add Exam flow
+        application.add_handler(get_add_exam_conversation_handler())
+        
+        # Add command handlers
+        application.add_handler(CommandHandler("start", cmd_start))
+        application.add_handler(CommandHandler("menu", cmd_menu))
+        application.add_handler(CommandHandler("help", cmd_help))
+        application.add_handler(CommandHandler("add", cmd_add))
+        application.add_handler(CommandHandler("list", cmd_list))
+        application.add_handler(CommandHandler("delete", cmd_delete))
+        application.add_handler(CommandHandler("settime", cmd_settime))
+        application.add_handler(CommandHandler("timezone", cmd_timezone))
+        
+        # Add button handlers (Reply Keyboard)
+        application.add_handler(MessageHandler(
+            filters.Regex("^📋 List Exams$"),
+            cmd_list
+        ))
+        application.add_handler(MessageHandler(
+            filters.Regex("^🗑 Delete Exam$"),
+            btn_delete_exam
+        ))
+        application.add_handler(MessageHandler(
+            filters.Regex("^⏰ Set Daily Time$"),
+            btn_set_time
+        ))
+        application.add_handler(MessageHandler(
+            filters.Regex("^🌍 Set Timezone$"),
+            btn_set_timezone
+        ))
+        application.add_handler(MessageHandler(
+            filters.Regex("^ℹ️ Help$"),
+            cmd_help
+        ))
+        
+        # Add inline callback handlers
+        application.add_handler(CallbackQueryHandler(
+            callback_refresh_list,
+            pattern="^refresh_list$"
+        ))
+        application.add_handler(CallbackQueryHandler(
+            callback_notify_now,
+            pattern="^notify_now$"
+        ))
+        application.add_handler(CallbackQueryHandler(
+            callback_delete_exam,
+            pattern="^del:"
+        ))
+        
+        # Add handler for plain text (time and timezone inputs)
+        application.add_handler(MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_time_input
+        ))
+        application.add_handler(MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_timezone_input
+        ))
+        
+        # Schedule reminders for all users
+        schedule_all_users(application)
+        
+        # Start the bot
+        logger.info("Starting bot...")
+        if Config.DEBUG_FAST_SCHEDULE:
+            logger.warning("DEBUG_FAST_SCHEDULE is enabled - notifications every 60 seconds!")
+        
+        print("\n" + "="*50)
+        print("🤖 Bot started successfully!")
+        print("="*50)
+        if Config.DEBUG_FAST_SCHEDULE:
+            print("⚠️  DEBUG MODE: Fast schedule enabled (60s intervals)")
+        print("Press Ctrl+C to stop the bot")
+        print("="*50 + "\n")
+        
+        application.run_polling(allowed_updates=["message", "callback_query"])
+        
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+        print("\n👋 Bot stopped. Goodbye!")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}", exc_info=True)
+        print(f"\n❌ Error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
