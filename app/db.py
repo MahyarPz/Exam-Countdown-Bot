@@ -190,6 +190,17 @@ def get_user_exams(user_id: int) -> List[Dict[str, Any]]:
         return [_dict_row(row) for row in cursor.fetchall()]
 
 
+def get_all_users() -> List[Dict[str, Any]]:
+    """Return all users."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if Config.use_postgres():
+            cursor.execute("SELECT * FROM users ORDER BY user_id")
+        else:
+            cursor.execute("SELECT * FROM users ORDER BY user_id")
+        return [_dict_row(row) for row in cursor.fetchall()]
+
+
 def delete_exam(exam_id: int, user_id: int) -> bool:
     """Delete an exam (only if it belongs to the user)."""
     with get_db() as conn:
