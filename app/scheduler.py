@@ -49,9 +49,14 @@ def schedule_user_reminder(application: Application, user_id: int, notify_time_s
         timezone_str: IANA timezone string
     """
     job_name = f"daily:{user_id}"
+
+    job_queue = application.job_queue
+    if job_queue is None:
+        logger.error("Job queue is not available; skipping scheduling for user %s", user_id)
+        return
     
     # Remove existing job if present
-    current_jobs = application.job_queue.get_jobs_by_name(job_name)
+    current_jobs = job_queue.get_jobs_by_name(job_name)
     for job in current_jobs:
         job.schedule_removal()
     
@@ -65,7 +70,7 @@ def schedule_user_reminder(application: Application, user_id: int, notify_time_s
     # Schedule job
     if Config.DEBUG_FAST_SCHEDULE:
         # For testing: run every 60 seconds
-        application.job_queue.run_repeating(
+        job_queue.run_repeating(
             send_daily_reminder,
             interval=60,
             first=5,  # Start after 5 seconds
@@ -75,7 +80,7 @@ def schedule_user_reminder(application: Application, user_id: int, notify_time_s
         logger.info(f"Scheduled FAST reminder for user {user_id} every 60 seconds")
     else:
         # Normal: run daily at specified time
-        application.job_queue.run_daily(
+        job_queue.run_daily(
             send_daily_reminder,
             time=notify_time,
             days=(0, 1, 2, 3, 4, 5, 6),  # All days
