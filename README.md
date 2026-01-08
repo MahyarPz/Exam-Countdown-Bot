@@ -1,6 +1,6 @@
 # Exam Countdown Bot
 
-A production-ready Telegram bot for managing exam dates and receiving daily countdown notifications.
+A production-ready Telegram bot for managing exam dates and receiving daily countdown notifications. Supports SQLite, PostgreSQL, and Google Firestore.
 
 ## Features
 
@@ -9,13 +9,18 @@ A production-ready Telegram bot for managing exam dates and receiving daily coun
 - 🌍 Timezone support (IANA timezones)
 - 🎯 Reply Keyboard for easy navigation
 - ⚡ Inline buttons for quick actions
-- 💾 SQLite database for persistence
+- 💬 User feedback system with admin notifications
+- 💾 Multi-database support:
+  - SQLite (default, local)
+  - PostgreSQL (recommended for production)
+  - Google Firestore (cloud-based)
 - 🔄 Always-on polling with async support
 
 ## Requirements
 
 - Python 3.11+
 - Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
+- Optional: Google Firebase/Firestore account (for cloud database)
 
 ## Installation
 
@@ -38,10 +43,54 @@ A production-ready Telegram bot for managing exam dates and receiving daily coun
 
 4. **Configure environment:**
    - Copy `.env.example` to `.env`
-   - Add your bot token from BotFather:
-     ```
-     BOT_TOKEN=your_bot_token_here
-     ```
+   - Choose your database option and add configuration
+
+### Database Configuration Options
+
+#### Option 1: SQLite (Default - No Setup Needed)
+Use this for testing or small deployments. Data is stored in `exam_bot.db` locally.
+
+#### Option 2: PostgreSQL
+For production deployments:
+```bash
+# Add to .env:
+DATABASE_URL=postgresql://user:password@localhost:5432/exam_bot
+```
+
+#### Option 3: Google Firestore (Cloud-Based)
+Best for cloud deployments like Heroku:
+
+1. **Create Firebase project:**
+   - Go to [Firebase Console](https://console.firebase.google.com)
+   - Create a new project
+   - Copy Project ID
+
+2. **Create service account:**
+   - Go to Project Settings → Service Accounts
+   - Click "Generate New Private Key" (JSON)
+   - Save the JSON file
+
+3. **For Local Development:**
+   ```bash
+   # Add to .env:
+   USE_FIRESTORE=1
+   FIREBASE_PROJECT_ID=your-project-id
+   GOOGLE_APPLICATION_CREDENTIALS=/path/to/firebase-key.json
+   ```
+
+4. **For Heroku:**
+   ```bash
+   # Convert JSON to single line (no newlines) and add to Config Vars:
+   FIREBASE_CREDENTIALS='{"type":"service_account","project_id":"..."...}'
+   USE_FIRESTORE=1
+   FIREBASE_PROJECT_ID=your-project-id
+   GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-key.json
+   ```
+
+5. **Add to Procfile** (if needed):
+   ```
+   web: python -m app.main
+   ```
 
 ## Running the Bot
 
@@ -68,6 +117,7 @@ After `/start`, you'll see a menu with buttons:
 - **🗑 Delete Exam** - Show list with delete buttons
 - **⏰ Set Daily Time** - Change notification time (HH:MM format)
 - **🌍 Set Timezone** - Set your timezone (e.g., Europe/Rome, America/New_York)
+- **💬 Feedback** - Send feedback to admin
 - **ℹ️ Help** - Show help message
 
 ### Commands (Alternative)

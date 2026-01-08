@@ -1,4 +1,4 @@
-"""Database operations for users and exams."""
+"""Database operations for users and exams - supports SQLite, PostgreSQL, and Firestore."""
 
 import logging
 import sqlite3
@@ -8,6 +8,14 @@ from typing import Any, Dict, List, Optional
 from app.config import Config
 
 logger = logging.getLogger(__name__)
+
+# Import Firestore module if using Firestore
+if Config.use_firestore():
+    from app import firestore_db
+    _firestore_initialized = False
+else:
+    firestore_db = None
+    _firestore_initialized = False
 
 # Try to import psycopg2 for PostgreSQL support
 try:  # pragma: no cover - optional dependency
@@ -38,61 +46,73 @@ def get_db():
 
 
 def init_db() -> None:
-    """Create tables if they do not exist."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        if Config.use_postgres():
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id BIGINT PRIMARY KEY,
-                    timezone VARCHAR(100) NOT NULL DEFAULT 'Europe/Rome',
-                    notify_time VARCHAR(5) NOT NULL DEFAULT '09:00'
-                )
-                """
-            )
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS exams (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    user_exam_id INTEGER,
-                    title TEXT NOT NULL,
-                    exam_datetime_iso TEXT NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-                )
-                """
-            )
-            logger.info("PostgreSQL database initialized successfully")
-        else:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id INTEGER PRIMARY KEY,
-                    timezone TEXT NOT NULL DEFAULT 'Europe/Rome',
-                    notify_time TEXT NOT NULL DEFAULT '09:00'
-                )
-                """
-            )
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS exams (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    user_exam_id INTEGER,
-                    title TEXT NOT NULL,
-                    exam_datetime_iso TEXT NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id)
-                )
-                """
-            )
-            logger.info("SQLite database initialized successfully")
-
+    """Initialize database (SQLite, PostgreSQL, or Firestore)."""
+    global _firestore_initialized
+    
+    if Config.use_firestore():
         try:
-            _ensure_user_exam_id(conn, cursor)
+            firestore_db.init_firestore()
+            _firestore_initialized = True
+            logger.info("Using Firestore database")
         except Exception as e:
-            logger.error(f"Error in _ensure_user_exam_id: {e}. Continuing anyway.")
-            conn.rollback()
+            logger.error(f"Firestore initialization failed: {e}")
+            raise
+    else:
+        # Existing SQLite/PostgreSQL initialization
+        with get_db() as conn:
+            cursor = conn.cursor()
+            if Config.use_postgres():
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS users (
+                        user_id BIGINT PRIMARY KEY,
+                        timezone VARCHAR(100) NOT NULL DEFAULT 'Europe/Rome',
+                        notify_time VARCHAR(5) NOT NULL DEFAULT '09:00'
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS exams (
+                        id SERIAL PRIMARY KEY,
+                        user_id BIGINT NOT NULL,
+                        user_exam_id INTEGER,
+                        title TEXT NOT NULL,
+                        exam_datetime_iso TEXT NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+                    )
+                    """
+                )
+                logger.info("PostgreSQL database initialized successfully")
+            else:
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS users (
+                        user_id INTEGER PRIMARY KEY,
+                        timezone TEXT NOT NULL DEFAULT 'Europe/Rome',
+                        notify_time TEXT NOT NULL DEFAULT '09:00'
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS exams (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        user_exam_id INTEGER,
+                        title TEXT NOT NULL,
+                        exam_datetime_iso TEXT NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users(user_id)
+                    )
+                    """
+                )
+                logger.info("SQLite database initialized successfully")
+
+            try:
+                _ensure_user_exam_id(conn, cursor)
+            except Exception as e:
+                logger.error(f"Error in _ensure_user_exam_id: {e}. Continuing anyway.")
+                conn.rollback()
 
 
 def _dict_row(row: Any) -> Dict[str, Any]:
@@ -222,6 +242,10 @@ def _next_user_exam_id(cursor: Any, user_id: int) -> int:
 
 def get_or_create_user(user_id: int) -> Dict[str, Any]:
     """Return user row; create with defaults if missing."""
+    if Config.use_firestore():
+        return firestore_db.get_or_create_user(user_id)
+    
+    # Existing SQLite/PostgreSQL code
     with get_db() as conn:
         cursor = conn.cursor()
         if Config.use_postgres():
@@ -249,38 +273,48 @@ def get_or_create_user(user_id: int) -> Dict[str, Any]:
 
 def update_user_timezone(user_id: int, timezone: str) -> None:
     """Update user's timezone."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        if Config.use_postgres():
-            cursor.execute(
-                "UPDATE users SET timezone = %s WHERE user_id = %s",
-                (timezone, user_id),
-            )
-        else:
-            cursor.execute(
-                "UPDATE users SET timezone = ? WHERE user_id = ?",
-                (timezone, user_id),
-            )
+    if Config.use_firestore():
+        firestore_db.update_user_timezone(user_id, timezone)
+    else:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            if Config.use_postgres():
+                cursor.execute(
+                    "UPDATE users SET timezone = %s WHERE user_id = %s",
+                    (timezone, user_id),
+                )
+            else:
+                cursor.execute(
+                    "UPDATE users SET timezone = ? WHERE user_id = ?",
+                    (timezone, user_id),
+                )
 
 
 def update_user_notify_time(user_id: int, notify_time: str) -> None:
     """Update user's notification time."""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        if Config.use_postgres():
-            cursor.execute(
-                "UPDATE users SET notify_time = %s WHERE user_id = %s",
-                (notify_time, user_id),
-            )
-        else:
-            cursor.execute(
-                "UPDATE users SET notify_time = ? WHERE user_id = ?",
-                (notify_time, user_id),
-            )
+    if Config.use_firestore():
+        firestore_db.update_user_notify_time(user_id, notify_time)
+    else:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            if Config.use_postgres():
+                cursor.execute(
+                    "UPDATE users SET notify_time = %s WHERE user_id = %s",
+                    (notify_time, user_id),
+                )
+            else:
+                cursor.execute(
+                    "UPDATE users SET notify_time = ? WHERE user_id = ?",
+                    (notify_time, user_id),
+                )
 
 
 def add_exam(user_id: int, title: str, exam_datetime_iso: str) -> int:
     """Insert a new exam and return its per-user id."""
+    if Config.use_firestore():
+        return firestore_db.add_exam(user_id, title, exam_datetime_iso)
+    
+    # Existing SQLite/PostgreSQL code
     with get_db() as conn:
         cursor = conn.cursor()
         try:
@@ -306,6 +340,10 @@ def add_exam(user_id: int, title: str, exam_datetime_iso: str) -> int:
 
 def get_user_exams(user_id: int) -> List[Dict[str, Any]]:
     """Return all exams for a user ordered by datetime."""
+    if Config.use_firestore():
+        return firestore_db.get_user_exams(user_id)
+    
+    # Existing SQLite/PostgreSQL code
     with get_db() as conn:
         cursor = conn.cursor()
         if Config.use_postgres():
@@ -323,6 +361,10 @@ def get_user_exams(user_id: int) -> List[Dict[str, Any]]:
 
 def get_all_users() -> List[Dict[str, Any]]:
     """Return all users."""
+    if Config.use_firestore():
+        return firestore_db.get_all_users()
+    
+    # Existing SQLite/PostgreSQL code
     with get_db() as conn:
         cursor = conn.cursor()
         if Config.use_postgres():
@@ -334,6 +376,10 @@ def get_all_users() -> List[Dict[str, Any]]:
 
 def delete_exam(user_exam_id: int, user_id: int) -> bool:
     """Delete an exam (only if it belongs to the user)."""
+    if Config.use_firestore():
+        return firestore_db.delete_exam(user_exam_id, user_id)
+    
+    # Existing SQLite/PostgreSQL code
     with get_db() as conn:
         cursor = conn.cursor()
         if Config.use_postgres():
@@ -351,6 +397,10 @@ def delete_exam(user_exam_id: int, user_id: int) -> bool:
 
 def get_exam_by_id(user_exam_id: int, user_id: int) -> Optional[Dict[str, Any]]:
     """Get a specific exam by per-user ID (only if it belongs to the user)."""
+    if Config.use_firestore():
+        return firestore_db.get_exam_by_id(user_exam_id, user_id)
+    
+    # Existing SQLite/PostgreSQL code
     with get_db() as conn:
         cursor = conn.cursor()
         if Config.use_postgres():
