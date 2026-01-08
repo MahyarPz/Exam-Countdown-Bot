@@ -56,7 +56,7 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS exams (
                     id SERIAL PRIMARY KEY,
                     user_id BIGINT NOT NULL,
-                    user_exam_id INTEGER NOT NULL,
+                    user_exam_id INTEGER,
                     title TEXT NOT NULL,
                     exam_datetime_iso TEXT NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
@@ -79,7 +79,7 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS exams (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
-                    user_exam_id INTEGER NOT NULL,
+                    user_exam_id INTEGER,
                     title TEXT NOT NULL,
                     exam_datetime_iso TEXT NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
@@ -88,7 +88,11 @@ def init_db() -> None:
             )
             logger.info("SQLite database initialized successfully")
 
-        _ensure_user_exam_id(conn, cursor)
+        try:
+            _ensure_user_exam_id(conn, cursor)
+        except Exception as e:
+            logger.error(f"Error in _ensure_user_exam_id: {e}. Continuing anyway.")
+            conn.rollback()
 
 
 def _dict_row(row: Any) -> Dict[str, Any]:
@@ -115,56 +119,95 @@ def _has_column(cursor: Any, table_name: str, column_name: str) -> bool:
 
 def _ensure_user_exam_id(conn: Any, cursor: Any) -> None:
     """Ensure per-user exam IDs exist and are populated."""
-    if not _has_column(cursor, "exams", "user_exam_id"):
-        if Config.use_postgres():
-            cursor.execute("ALTER TABLE exams ADD COLUMN IF NOT EXISTS user_exam_id INTEGER")
-        else:
-            cursor.execute("ALTER TABLE exams ADD COLUMN user_exam_id INTEGER")
-
-    _backfill_user_exam_id(cursor)
-
-    # Enforce uniqueness per user
-    if Config.use_postgres():
-        cursor.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_exams_user_exam_per_user ON exams(user_id, user_exam_id)"
-        )
-    else:
-        cursor.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_exams_user_exam_per_user ON exams(user_id, user_exam_id)"
-        )
-    conn.commit()
+    try:
+        # Check if column exists
+        if not _has_column(cursor, "exams", "user_exam_id"):
+            logger.info("Adding user_exam_id column to exams table...")
+            if Config.use_postgres():
+                cursor.execute("ALTER TABLE exams ADD COLUMN user_exam_id INTEGER")
+            else:
+                cursor.execute("ALTER TABLE exams ADD COLUMN user_exam_id INTEGER")
+            conn.commit()
+    
+        # Backfill missing user_exam_id values
+        _backfill_user_exam_id(cursor)
+    
+        # Create index if it doesn't exist
+        try:
+            if Config.use_postgres():
+                cursor.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_exams_user_exam_per_user ON exams(user_id, user_exam_id)"
+                )
+            else:
+                cursor.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_exams_user_exam_per_user ON exams(user_id, user_exam_id)"
+                )
+        except Exception as e:
+            logger.debug(f"Index creation failed (might already exist): {e}")
+        
+        conn.commit()
+        logger.info("user_exam_id migration completed successfully")
+    
+    except Exception as e:
+        logger.error(f"Error in _ensure_user_exam_id: {e}")
+        conn.rollback()
+        raise
 
 
 def _backfill_user_exam_id(cursor: Any) -> None:
     """Assign sequential user_exam_id per user for existing rows."""
-    cursor.execute("SELECT DISTINCT user_id FROM exams WHERE user_exam_id IS NULL")
-    users_missing = cursor.fetchall()
+    try:
+        if Config.use_postgres():
+            cursor.execute("SELECT DISTINCT user_id FROM exams WHERE user_exam_id IS NULL")
+        else:
+            cursor.execute("SELECT DISTINCT user_id FROM exams WHERE user_exam_id IS NULL")
+        
+        users_missing = cursor.fetchall()
+        
+        if not users_missing:
+            logger.debug("No exams need user_exam_id backfill")
+            return
+        
+        logger.info(f"Backfilling user_exam_id for {len(users_missing)} users...")
 
-    for row in users_missing:
-        user_id = row[0] if not isinstance(row, dict) else row.get("user_id")
-        if user_id is None:
-            continue
-        cursor.execute(
-            "SELECT id FROM exams WHERE user_id = ? AND user_exam_id IS NULL ORDER BY id"
-            if not Config.use_postgres()
-            else "SELECT id FROM exams WHERE user_id = %s AND user_exam_id IS NULL ORDER BY id",
-            (user_id,),
-        )
-        rows = cursor.fetchall()
-        for idx, exam_row in enumerate(rows, start=1):
-            exam_id = exam_row[0] if not isinstance(exam_row, dict) else exam_row.get("id")
-            if exam_id is None:
+        for row in users_missing:
+            user_id = row[0] if not isinstance(row, dict) else row.get("user_id")
+            if user_id is None:
                 continue
+            
             if Config.use_postgres():
                 cursor.execute(
-                    "UPDATE exams SET user_exam_id = %s WHERE id = %s",
-                    (idx, exam_id),
+                    "SELECT id FROM exams WHERE user_id = %s AND user_exam_id IS NULL ORDER BY id",
+                    (user_id,),
                 )
             else:
                 cursor.execute(
-                    "UPDATE exams SET user_exam_id = ? WHERE id = ?",
-                    (idx, exam_id),
+                    "SELECT id FROM exams WHERE user_id = ? AND user_exam_id IS NULL ORDER BY id",
+                    (user_id,),
                 )
+            
+            rows = cursor.fetchall()
+            for idx, exam_row in enumerate(rows, start=1):
+                exam_id = exam_row[0] if not isinstance(exam_row, dict) else exam_row.get("id")
+                if exam_id is None:
+                    continue
+                
+                if Config.use_postgres():
+                    cursor.execute(
+                        "UPDATE exams SET user_exam_id = %s WHERE id = %s",
+                        (idx, exam_id),
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE exams SET user_exam_id = ? WHERE id = ?",
+                        (idx, exam_id),
+                    )
+        
+        logger.info("Backfill completed successfully")
+    
+    except Exception as e:
+        logger.error(f"Error in _backfill_user_exam_id: {e}")
+        raise
 
 
 def _next_user_exam_id(cursor: Any, user_id: int) -> int:
@@ -237,10 +280,13 @@ def update_user_notify_time(user_id: int, notify_time: str) -> None:
 
 
 def add_exam(user_id: int, title: str, exam_datetime_iso: str) -> int:
-    """Insert a new exam and return its id."""
+    """Insert a new exam and return its per-user id."""
     with get_db() as conn:
         cursor = conn.cursor()
-        _ensure_user_exam_id(conn, cursor)
+        try:
+            _ensure_user_exam_id(conn, cursor)
+        except Exception as e:
+            logger.warning(f"Migration warning: {e}")
 
         user_exam_id = _next_user_exam_id(cursor, user_id)
 
