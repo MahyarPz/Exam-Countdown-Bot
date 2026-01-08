@@ -153,11 +153,11 @@ async def cmd_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             exam['exam_datetime_iso'],
             user['timezone']
         )
-            lines.append(
-                f"🆔 {exam['user_exam_id']}: **{exam['title']}**\n"
-                f"   📅 {exam['exam_datetime_iso'].replace('T', ' ')}\n"
-                f"   ⏳ {countdown_msg}\n"
-            )
+        lines.append(
+            f"🆔 {exam['user_exam_id']}: **{exam['title']}**\n"
+            f"   📅 {exam['exam_datetime_iso'].replace('T', ' ')}\n"
+            f"   ⏳ {countdown_msg}\n"
+        )
     
     message_text = '\n'.join(lines)
     
