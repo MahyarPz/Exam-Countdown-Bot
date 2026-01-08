@@ -15,6 +15,7 @@ class Config:
     
     # Optional
     DEBUG_FAST_SCHEDULE: bool = os.getenv("DEBUG_FAST_SCHEDULE", "0") == "1"
+    ADMIN_ID: int = int(os.getenv("ADMIN_ID", "0"))
     
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")

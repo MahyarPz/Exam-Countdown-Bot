@@ -30,6 +30,7 @@ from app.handlers import (
     handle_timezone_input
 )
 from app.conversations import get_add_exam_conversation_handler
+from app.feedback_handler import get_feedback_conversation_handler
 from app.scheduler import schedule_all_users
 
 # Configure logging
@@ -59,6 +60,9 @@ def main() -> None:
         
         # Add conversation handler for Add Exam flow
         application.add_handler(get_add_exam_conversation_handler())
+        
+        # Add conversation handler for Feedback flow
+        application.add_handler(get_feedback_conversation_handler())
         
         # Add command handlers
         application.add_handler(CommandHandler("start", cmd_start))
@@ -90,6 +94,10 @@ def main() -> None:
         application.add_handler(MessageHandler(
             filters.Regex("^ℹ️ Help$"),
             cmd_help
+        ))
+        application.add_handler(MessageHandler(
+            filters.Regex("^💬 Feedback$"),
+            lambda u, c: None  # Handled by conversation handler
         ))
         
         # Add inline callback handlers

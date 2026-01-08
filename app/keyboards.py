@@ -9,7 +9,8 @@ def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
     keyboard = [
         ["➕ Add Exam", "📋 List Exams"],
         ["🗑 Delete Exam", "⏰ Set Daily Time"],
-        ["🌍 Set Timezone", "ℹ️ Help"]
+        ["🌍 Set Timezone", "💬 Feedback"],
+        ["ℹ️ Help"]
     ]
     return ReplyKeyboardMarkup(
         keyboard,
