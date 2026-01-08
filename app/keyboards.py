@@ -33,8 +33,8 @@ def get_exam_list_inline_keyboard(exams: List[Dict[str, Any]], show_delete_butto
         for exam in exams[:10]:
             buttons.append([
                 InlineKeyboardButton(
-                    f"🗑 Delete #{exam['id']} - {exam['title'][:30]}",
-                    callback_data=f"del:{exam['id']}"
+                    f"🗑 Delete #{exam['user_exam_id']} - {exam['title'][:30]}",
+                    callback_data=f"del:{exam['user_exam_id']}"
                 )
             ])
     

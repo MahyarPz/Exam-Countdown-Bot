@@ -56,6 +56,7 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS exams (
                     id SERIAL PRIMARY KEY,
                     user_id BIGINT NOT NULL,
+                    user_exam_id INTEGER NOT NULL,
                     title TEXT NOT NULL,
                     exam_datetime_iso TEXT NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
@@ -78,6 +79,7 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS exams (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
+                    user_exam_id INTEGER NOT NULL,
                     title TEXT NOT NULL,
                     exam_datetime_iso TEXT NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
@@ -85,6 +87,8 @@ def init_db() -> None:
                 """
             )
             logger.info("SQLite database initialized successfully")
+
+        _ensure_user_exam_id(conn, cursor)
 
 
 def _dict_row(row: Any) -> Dict[str, Any]:
@@ -94,6 +98,83 @@ def _dict_row(row: Any) -> Dict[str, Any]:
     if isinstance(row, dict):
         return row
     return dict(row)
+
+
+def _has_column(cursor: Any, table_name: str, column_name: str) -> bool:
+    """Return True if a column exists in the given table."""
+    if Config.use_postgres():
+        cursor.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_name = %s AND column_name = %s",
+            (table_name, column_name),
+        )
+        return cursor.fetchone() is not None
+
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    return any(row[1] == column_name for row in cursor.fetchall())
+
+
+def _ensure_user_exam_id(conn: Any, cursor: Any) -> None:
+    """Ensure per-user exam IDs exist and are populated."""
+    if not _has_column(cursor, "exams", "user_exam_id"):
+        if Config.use_postgres():
+            cursor.execute("ALTER TABLE exams ADD COLUMN IF NOT EXISTS user_exam_id INTEGER")
+        else:
+            cursor.execute("ALTER TABLE exams ADD COLUMN user_exam_id INTEGER")
+
+    _backfill_user_exam_id(cursor)
+
+    # Enforce uniqueness per user
+    if Config.use_postgres():
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_exams_user_exam_per_user ON exams(user_id, user_exam_id)"
+        )
+    else:
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_exams_user_exam_per_user ON exams(user_id, user_exam_id)"
+        )
+    conn.commit()
+
+
+def _backfill_user_exam_id(cursor: Any) -> None:
+    """Assign sequential user_exam_id per user for existing rows."""
+    cursor.execute("SELECT DISTINCT user_id FROM exams WHERE user_exam_id IS NULL")
+    users_missing = cursor.fetchall()
+
+    for row in users_missing:
+        user_id = row[0] if not isinstance(row, dict) else row.get("user_id")
+        if user_id is None:
+            continue
+        cursor.execute(
+            "SELECT id FROM exams WHERE user_id = ? AND user_exam_id IS NULL ORDER BY id"
+            if not Config.use_postgres()
+            else "SELECT id FROM exams WHERE user_id = %s AND user_exam_id IS NULL ORDER BY id",
+            (user_id,),
+        )
+        rows = cursor.fetchall()
+        for idx, exam_row in enumerate(rows, start=1):
+            exam_id = exam_row[0] if not isinstance(exam_row, dict) else exam_row.get("id")
+            if exam_id is None:
+                continue
+            if Config.use_postgres():
+                cursor.execute(
+                    "UPDATE exams SET user_exam_id = %s WHERE id = %s",
+                    (idx, exam_id),
+                )
+            else:
+                cursor.execute(
+                    "UPDATE exams SET user_exam_id = ? WHERE id = ?",
+                    (idx, exam_id),
+                )
+
+
+def _next_user_exam_id(cursor: Any, user_id: int) -> int:
+    """Return next sequential exam id for the user."""
+    if Config.use_postgres():
+        cursor.execute("SELECT COALESCE(MAX(user_exam_id), 0) + 1 FROM exams WHERE user_id = %s", (user_id,))
+    else:
+        cursor.execute("SELECT COALESCE(MAX(user_exam_id), 0) + 1 FROM exams WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    return int(row[0] if not isinstance(row, dict) else list(row.values())[0])
 
 
 def get_or_create_user(user_id: int) -> Dict[str, Any]:
@@ -159,18 +240,22 @@ def add_exam(user_id: int, title: str, exam_datetime_iso: str) -> int:
     """Insert a new exam and return its id."""
     with get_db() as conn:
         cursor = conn.cursor()
+        _ensure_user_exam_id(conn, cursor)
+
+        user_exam_id = _next_user_exam_id(cursor, user_id)
+
         if Config.use_postgres():
             cursor.execute(
-                "INSERT INTO exams (user_id, title, exam_datetime_iso) VALUES (%s, %s, %s) RETURNING id",
-                (user_id, title, exam_datetime_iso),
+                "INSERT INTO exams (user_id, user_exam_id, title, exam_datetime_iso) VALUES (%s, %s, %s, %s) RETURNING user_exam_id",
+                (user_id, user_exam_id, title, exam_datetime_iso),
             )
             row = cursor.fetchone()
-            return int(row["id"] if isinstance(row, dict) else row[0])
+            return int(row["user_exam_id"] if isinstance(row, dict) else row[0])
         cursor.execute(
-            "INSERT INTO exams (user_id, title, exam_datetime_iso) VALUES (?, ?, ?)",
-            (user_id, title, exam_datetime_iso),
+            "INSERT INTO exams (user_id, user_exam_id, title, exam_datetime_iso) VALUES (?, ?, ?, ?)",
+            (user_id, user_exam_id, title, exam_datetime_iso),
         )
-        return int(cursor.lastrowid)
+        return int(user_exam_id)
 
 
 def get_user_exams(user_id: int) -> List[Dict[str, Any]]:
@@ -179,12 +264,12 @@ def get_user_exams(user_id: int) -> List[Dict[str, Any]]:
         cursor = conn.cursor()
         if Config.use_postgres():
             cursor.execute(
-                "SELECT * FROM exams WHERE user_id = %s ORDER BY exam_datetime_iso",
+                "SELECT * FROM exams WHERE user_id = %s ORDER BY user_exam_id",
                 (user_id,),
             )
         else:
             cursor.execute(
-                "SELECT * FROM exams WHERE user_id = ? ORDER BY exam_datetime_iso",
+                "SELECT * FROM exams WHERE user_id = ? ORDER BY user_exam_id",
                 (user_id,),
             )
         return [_dict_row(row) for row in cursor.fetchall()]
@@ -201,36 +286,36 @@ def get_all_users() -> List[Dict[str, Any]]:
         return [_dict_row(row) for row in cursor.fetchall()]
 
 
-def delete_exam(exam_id: int, user_id: int) -> bool:
+def delete_exam(user_exam_id: int, user_id: int) -> bool:
     """Delete an exam (only if it belongs to the user)."""
     with get_db() as conn:
         cursor = conn.cursor()
         if Config.use_postgres():
             cursor.execute(
-                "DELETE FROM exams WHERE id = %s AND user_id = %s",
-                (exam_id, user_id),
+                "DELETE FROM exams WHERE user_exam_id = %s AND user_id = %s",
+                (user_exam_id, user_id),
             )
         else:
             cursor.execute(
-                "DELETE FROM exams WHERE id = ? AND user_id = ?",
-                (exam_id, user_id),
+                "DELETE FROM exams WHERE user_exam_id = ? AND user_id = ?",
+                (user_exam_id, user_id),
             )
         return cursor.rowcount > 0
 
 
-def get_exam_by_id(exam_id: int, user_id: int) -> Optional[Dict[str, Any]]:
-    """Get a specific exam by ID (only if it belongs to the user)."""
+def get_exam_by_id(user_exam_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+    """Get a specific exam by per-user ID (only if it belongs to the user)."""
     with get_db() as conn:
         cursor = conn.cursor()
         if Config.use_postgres():
             cursor.execute(
-                "SELECT * FROM exams WHERE id = %s AND user_id = %s",
-                (exam_id, user_id),
+                "SELECT * FROM exams WHERE user_exam_id = %s AND user_id = %s",
+                (user_exam_id, user_id),
             )
         else:
             cursor.execute(
-                "SELECT * FROM exams WHERE id = ? AND user_id = ?",
-                (exam_id, user_id),
+                "SELECT * FROM exams WHERE user_exam_id = ? AND user_id = ?",
+                (user_exam_id, user_id),
             )
         row = cursor.fetchone()
         return _dict_row(row) if row else None
