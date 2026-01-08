@@ -55,9 +55,11 @@ def init_db() -> None:
             _firestore_initialized = True
             logger.info("Using Firestore database")
         except Exception as e:
-            logger.error(f"Firestore initialization failed: {e}")
-            raise
-    else:
+            logger.error(f"Firestore initialization failed: {e}. Falling back to SQLite.")
+            Config.USE_FIRESTORE = False
+    
+    # If not using Firestore (or failed to init), use SQLite/PostgreSQL
+    if not Config.use_firestore():
         # Existing SQLite/PostgreSQL initialization
         with get_db() as conn:
             cursor = conn.cursor()
