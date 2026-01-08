@@ -447,11 +447,11 @@ async def callback_delete_exam(update: Update, context: ContextTypes.DEFAULT_TYP
                 exam['exam_datetime_iso'],
                 user['timezone']
             )
-                lines.append(
-                    f"🆔 {exam['user_exam_id']}: {exam['title']}\n"
-                    f"   📅 {exam['exam_datetime_iso'].replace('T', ' ')}\n"
-                    f"   ⏳ {countdown_msg}\n"
-                )
+            lines.append(
+                f"🆔 {exam['user_exam_id']}: {exam['title']}\n"
+                f"   📅 {exam['exam_datetime_iso'].replace('T', ' ')}\n"
+                f"   ⏳ {countdown_msg}\n"
+            )
         
         message_text = '\n'.join(lines)
         keyboard = get_exam_list_inline_keyboard(exams, show_delete_buttons=True)
