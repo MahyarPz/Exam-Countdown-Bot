@@ -40,7 +40,12 @@ async def send_daily_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
             )
             logger.info(f"Sent daily reminder to user {user_id}")
         else:
-            logger.info(f"No upcoming exams for user {user_id}, skipping reminder")
+            # Send a message even when no exams, so user knows the scheduler works
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="📭 No upcoming exams to remind you about!\n\nUse ➕ Add Exam to add your exams."
+            )
+            logger.info(f"No upcoming exams for user {user_id}, sent empty notification")
     
     except Exception as e:
         logger.error(f"Error sending daily reminder to user {user_id}: {e}", exc_info=True)

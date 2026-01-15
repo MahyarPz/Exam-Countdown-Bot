@@ -1,5 +1,6 @@
 """Main entry point for the Exam Countdown Bot."""
 
+import asyncio
 import logging
 import sys
 from telegram.ext import (
@@ -152,4 +153,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Fix for Python 3.10+ - create event loop before running
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
     main()
