@@ -3,11 +3,13 @@
 import asyncio
 import logging
 import sys
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
+    ContextTypes,
     filters
 )
 from app.config import Config
@@ -37,6 +39,7 @@ from app.handlers import (
     callback_notify_now,
     callback_delete_exam,
     callback_reply_button,
+    handle_admin_reply,
     handle_time_input,
     handle_timezone_input
 )
@@ -156,14 +159,22 @@ def main() -> None:
             pattern="^reply:"
         ))
         
-        # Add handler for plain text (time and timezone inputs)
+        # Add handler for admin reply (must be before other text handlers)
+        async def combined_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+            """Handle text input - check admin reply first, then time/timezone."""
+            # First check if it's an admin reply
+            if await handle_admin_reply(update, context):
+                return
+            
+            # Then try time input
+            await handle_time_input(update, context)
+            
+            # Then try timezone input
+            await handle_timezone_input(update, context)
+        
         application.add_handler(MessageHandler(
             filters.TEXT & ~filters.COMMAND,
-            handle_time_input
-        ))
-        application.add_handler(MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            handle_timezone_input
+            combined_text_handler
         ))
         
         # Schedule reminders for all users

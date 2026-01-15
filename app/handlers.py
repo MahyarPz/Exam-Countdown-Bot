@@ -812,14 +812,62 @@ async def callback_reply_button(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer("Invalid user ID")
         return
     
-    # Store target user in context and prompt for message
+    # Store target user in context for next message
     context.user_data['reply_to_user'] = target_user_id
     
-    await query.edit_message_text(
-        f"{query.message.text}\n\n"
-        f"─────────────────────\n"
-        f"💬 **Reply Mode Active**\n"
-        f"Send your reply using:\n"
-        f"`/reply {target_user_id} Your message here`",
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=f"💬 **Reply Mode Active**\n\n"
+             f"Now send your message. It will be sent to user `{target_user_id}`.\n\n"
+             f"Send /cancel to cancel.",
         parse_mode='Markdown'
     )
+
+
+async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """
+    Handle admin's reply message to a user.
+    Returns True if message was handled as a reply, False otherwise.
+    """
+    user_id = update.effective_user.id
+    
+    # Check if admin and has pending reply
+    if not is_admin(user_id):
+        return False
+    
+    target_user_id = context.user_data.get('reply_to_user')
+    if not target_user_id:
+        return False
+    
+    message_text = update.message.text.strip()
+    
+    # Check for cancel
+    if message_text == "/cancel":
+        context.user_data.pop('reply_to_user', None)
+        await update.message.reply_text("❌ Reply cancelled.")
+        return True
+    
+    # Send message to user
+    try:
+        await context.bot.send_message(
+            chat_id=target_user_id,
+            text=f"📬 **Reply from Admin:**\n\n{message_text}",
+            parse_mode='Markdown'
+        )
+        
+        await update.message.reply_text(
+            f"✅ Reply sent to user `{target_user_id}`",
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Admin {user_id} replied to user {target_user_id}")
+        
+    except Exception as e:
+        logger.error(f"Failed to send reply to user {target_user_id}: {e}")
+        await update.message.reply_text(
+            f"❌ Failed to send message.\n\nError: {str(e)}"
+        )
+    
+    # Clear reply mode
+    context.user_data.pop('reply_to_user', None)
+    return True
