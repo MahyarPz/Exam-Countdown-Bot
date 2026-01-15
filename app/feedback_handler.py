@@ -1,7 +1,7 @@
 """Feedback handler for user feedback system."""
 
 import logging
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ContextTypes,
     ConversationHandler,
@@ -70,11 +70,17 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         f"💬 **Message:**\n{feedback_text}"
     )
     
+    # Create reply button
+    reply_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("↩️ Reply", callback_data=f"reply:{user.id}")]
+    ])
+    
     try:
         await context.bot.send_message(
             chat_id=admin_id,
             text=admin_message,
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=reply_keyboard
         )
         
         # Confirm to user

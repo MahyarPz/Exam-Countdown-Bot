@@ -25,6 +25,7 @@ from app.handlers import (
     cmd_schedule,
     cmd_broadcast,
     cmd_stats,
+    cmd_reply,
     btn_delete_exam,
     btn_set_time,
     btn_set_timezone,
@@ -35,6 +36,7 @@ from app.handlers import (
     callback_refresh_list,
     callback_notify_now,
     callback_delete_exam,
+    callback_reply_button,
     handle_time_input,
     handle_timezone_input
 )
@@ -90,6 +92,7 @@ def main() -> None:
         application.add_handler(CommandHandler("schedule", cmd_schedule))
         application.add_handler(CommandHandler("broadcast", cmd_broadcast))
         application.add_handler(CommandHandler("stats", cmd_stats))
+        application.add_handler(CommandHandler("reply", cmd_reply))
         
         # Add button handlers (Reply Keyboard)
         application.add_handler(MessageHandler(
@@ -147,6 +150,10 @@ def main() -> None:
         application.add_handler(CallbackQueryHandler(
             callback_delete_exam,
             pattern="^del:"
+        ))
+        application.add_handler(CallbackQueryHandler(
+            callback_reply_button,
+            pattern="^reply:"
         ))
         
         # Add handler for plain text (time and timezone inputs)
