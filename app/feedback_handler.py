@@ -23,8 +23,8 @@ async def start_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user = update.effective_user
     
     await update.message.reply_text(
-        "💬 **نظر یا پیشنهادتان را برایم بنویسید:**\n\n"
-        "لطفاً پیام خود را تایپ کنید یا /cancel برای انصراف.",
+        "💬 **Send your feedback or suggestion:**\n\n"
+        "Please type your message or /cancel to abort.",
         reply_markup=get_cancel_keyboard(),
         parse_mode='Markdown'
     )
@@ -39,14 +39,14 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     # Check for cancel
     if feedback_text == "❌ Cancel":
         await update.message.reply_text(
-            "❌ لغو شد.",
+            "❌ Cancelled.",
             reply_markup=get_main_menu_keyboard()
         )
         return ConversationHandler.END
     
     if not feedback_text:
         await update.message.reply_text(
-            "⚠️ پیام نمی‌تواند خالی باشد. لطفاً دوباره سعی کنید:",
+            "⚠️ Message cannot be empty. Please try again:",
             reply_markup=get_cancel_keyboard()
         )
         return ASK_FEEDBACK
@@ -56,18 +56,18 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if admin_id <= 0:
         logger.warning("ADMIN_ID not configured. Feedback not sent.")
         await update.message.reply_text(
-            "❌ خطا: ادمین تنظیم نشده است.",
+            "❌ Error: Admin not configured.",
             reply_markup=get_main_menu_keyboard()
         )
         return ConversationHandler.END
     
     # Format message for admin
     admin_message = (
-        f"📨 **نظر جدید از کاربر:**\n\n"
-        f"👤 نام: {user.first_name} {user.last_name or ''}\n"
+        f"📨 **New Feedback:**\n\n"
+        f"👤 Name: {user.first_name} {user.last_name or ''}\n"
         f"🆔 User ID: {user.id}\n"
-        f"📱 Username: @{user.username or 'ندارد'}\n\n"
-        f"💬 **متن نظر:**\n{feedback_text}"
+        f"📱 Username: @{user.username or 'N/A'}\n\n"
+        f"💬 **Message:**\n{feedback_text}"
     )
     
     try:
@@ -79,8 +79,8 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         
         # Confirm to user
         await update.message.reply_text(
-            "✅ **نظر شما با موفقیت ارسال شد.**\n\n"
-            "متشکریم!",
+            "✅ **Your feedback has been sent successfully.**\n\n"
+            "Thank you!",
             reply_markup=get_main_menu_keyboard(),
             parse_mode='Markdown'
         )
@@ -90,7 +90,7 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     except Exception as e:
         logger.error(f"Error sending feedback to admin {admin_id}: {e}")
         await update.message.reply_text(
-            "❌ خطا در ارسال نظر. لطفاً دوباره سعی کنید.",
+            "❌ Error sending feedback. Please try again.",
             reply_markup=get_main_menu_keyboard()
         )
     
@@ -100,7 +100,7 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def cancel_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel the feedback conversation."""
     await update.message.reply_text(
-        "❌ لغو شد.",
+        "❌ Cancelled.",
         reply_markup=get_main_menu_keyboard()
     )
     context.user_data.clear()
