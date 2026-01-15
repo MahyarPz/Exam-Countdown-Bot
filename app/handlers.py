@@ -20,6 +20,11 @@ from app.scheduler import reschedule_user_reminder, ensure_user_scheduled
 logger = logging.getLogger(__name__)
 
 
+def is_admin(user_id: int) -> bool:
+    """Check if user is admin."""
+    return user_id == Config.ADMIN_ID
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command."""
     user_id = update.effective_user.id
@@ -36,16 +41,17 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     await update.message.reply_text(
         welcome_text,
-        reply_markup=get_main_menu_keyboard()
+        reply_markup=get_main_menu_keyboard(is_admin(user_id))
     )
     logger.info(f"User {user_id} started the bot")
 
 
 async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /menu command - show the main menu keyboard."""
+    user_id = update.effective_user.id
     await update.message.reply_text(
         "📱 Here's your menu:",
-        reply_markup=get_main_menu_keyboard()
+        reply_markup=get_main_menu_keyboard(is_admin(user_id))
     )
 
 
@@ -567,7 +573,7 @@ async def handle_time_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         
         await update.message.reply_text(
             f"✅ Daily notification time set to {normalized_time}!",
-            reply_markup=get_main_menu_keyboard()
+            reply_markup=get_main_menu_keyboard(is_admin(user_id))
         )
         logger.info(f"User {user_id} set notification time to {normalized_time}")
         return
@@ -586,7 +592,7 @@ async def handle_timezone_input(update: Update, context: ContextTypes.DEFAULT_TY
         
         await update.message.reply_text(
             f"✅ Timezone set to {text}!",
-            reply_markup=get_main_menu_keyboard()
+            reply_markup=get_main_menu_keyboard(is_admin(user_id))
         )
         logger.info(f"User {user_id} set timezone to {text}")
         return
@@ -657,3 +663,68 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
     
     logger.info(f"Admin {user_id} broadcasted message to {success_count}/{len(users)} users")
+
+
+async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /stats command - Show bot statistics.
+    Only available to admin.
+    """
+    user_id = update.effective_user.id
+    
+    # Check if user is admin
+    if not is_admin(user_id):
+        await update.message.reply_text("⛔ This command is only available to the admin.")
+        return
+    
+    # Get all users
+    users = db.get_all_users()
+    
+    # Count total exams
+    total_exams = 0
+    users_with_exams = 0
+    for user in users:
+        exams = db.get_user_exams(user['user_id'])
+        if exams:
+            users_with_exams += 1
+            total_exams += len(exams)
+    
+    await update.message.reply_text(
+        f"📊 **Bot Statistics**\n\n"
+        f"👥 Total Users: `{len(users)}`\n"
+        f"📝 Total Exams: `{total_exams}`\n"
+        f"📚 Users with Exams: `{users_with_exams}`\n"
+        f"💤 Inactive Users: `{len(users) - users_with_exams}`",
+        parse_mode='Markdown'
+    )
+
+
+# Button handlers for admin panel
+async def btn_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle Broadcast button - prompt for message."""
+    user_id = update.effective_user.id
+    
+    if not is_admin(user_id):
+        return
+    
+    await update.message.reply_text(
+        "📢 **Broadcast Message**\n\n"
+        "Send the message you want to broadcast to all users.\n\n"
+        "Use `/broadcast Your message here`",
+        parse_mode='Markdown'
+    )
+
+
+async def btn_debug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle Debug button."""
+    await cmd_debug(update, context)
+
+
+async def btn_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle Schedule button."""
+    await cmd_schedule(update, context)
+
+
+async def btn_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle Stats button."""
+    await cmd_stats(update, context)

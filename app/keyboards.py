@@ -4,7 +4,7 @@ from telegram import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardBu
 from typing import List, Dict, Any
 
 
-def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
+def get_main_menu_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
     """Get the main menu Reply Keyboard."""
     keyboard = [
         ["➕ Add Exam", "📋 List Exams"],
@@ -12,6 +12,12 @@ def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
         ["🌍 Set Timezone", "💬 Feedback"],
         ["ℹ️ Help"]
     ]
+    
+    # Add admin buttons if user is admin
+    if is_admin:
+        keyboard.append(["📢 Broadcast", "🔧 Debug"])
+        keyboard.append(["📅 Schedule", "📊 Stats"])
+    
     return ReplyKeyboardMarkup(
         keyboard,
         resize_keyboard=True,

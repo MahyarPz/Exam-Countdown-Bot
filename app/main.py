@@ -24,9 +24,14 @@ from app.handlers import (
     cmd_debug,
     cmd_schedule,
     cmd_broadcast,
+    cmd_stats,
     btn_delete_exam,
     btn_set_time,
     btn_set_timezone,
+    btn_broadcast,
+    btn_debug,
+    btn_schedule,
+    btn_stats,
     callback_refresh_list,
     callback_notify_now,
     callback_delete_exam,
@@ -80,6 +85,7 @@ def main() -> None:
         application.add_handler(CommandHandler("debug", cmd_debug))
         application.add_handler(CommandHandler("schedule", cmd_schedule))
         application.add_handler(CommandHandler("broadcast", cmd_broadcast))
+        application.add_handler(CommandHandler("stats", cmd_stats))
         
         # Add button handlers (Reply Keyboard)
         application.add_handler(MessageHandler(
@@ -105,6 +111,24 @@ def main() -> None:
         application.add_handler(MessageHandler(
             filters.Regex("^💬 Feedback$"),
             lambda u, c: None  # Handled by conversation handler
+        ))
+        
+        # Admin button handlers
+        application.add_handler(MessageHandler(
+            filters.Regex("^📢 Broadcast$"),
+            btn_broadcast
+        ))
+        application.add_handler(MessageHandler(
+            filters.Regex("^🔧 Debug$"),
+            btn_debug
+        ))
+        application.add_handler(MessageHandler(
+            filters.Regex("^📅 Schedule$"),
+            btn_schedule
+        ))
+        application.add_handler(MessageHandler(
+            filters.Regex("^📊 Stats$"),
+            btn_stats
         ))
         
         # Add inline callback handlers
