@@ -1,6 +1,7 @@
 """Command and callback handlers."""
 
 import logging
+from datetime import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
 from app import db
@@ -43,6 +44,40 @@ async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "📱 Here's your menu:",
         reply_markup=get_main_menu_keyboard()
+    )
+
+
+async def cmd_debug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /debug command - show scheduler status."""
+    user_id = update.effective_user.id
+    user = db.get_or_create_user(user_id)
+    
+    # Get job queue info
+    job_queue = context.application.job_queue
+    job_name = f"daily:{user_id}"
+    jobs = job_queue.get_jobs_by_name(job_name) if job_queue else []
+    
+    lines = [
+        "🔧 **Debug Info:**\n",
+        f"👤 User ID: `{user_id}`",
+        f"🌍 Timezone: `{user['timezone']}`",
+        f"⏰ Notify Time: `{user['notify_time']}`",
+        f"🕐 Server Time: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`",
+        f"\n📋 **Scheduled Jobs:** {len(jobs)}",
+    ]
+    
+    for job in jobs:
+        next_run = job.next_t.strftime('%Y-%m-%d %H:%M:%S %Z') if job.next_t else 'N/A'
+        lines.append(f"  • Job: `{job.name}`")
+        lines.append(f"    Next run: `{next_run}`")
+    
+    if not jobs:
+        lines.append("  ⚠️ No jobs scheduled for you!")
+        lines.append("  Try: /start to reschedule")
+    
+    await update.message.reply_text(
+        "\n".join(lines),
+        parse_mode='Markdown'
     )
 
 
