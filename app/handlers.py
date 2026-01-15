@@ -67,9 +67,13 @@ async def cmd_debug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ]
     
     for job in jobs:
-        next_run = job.next_t.strftime('%Y-%m-%d %H:%M:%S %Z') if job.next_t else 'N/A'
+        try:
+            next_run = getattr(job, 'next_t', None) or getattr(job.job, 'next_run_time', None)
+            next_run_str = next_run.strftime('%Y-%m-%d %H:%M:%S %Z') if next_run else 'N/A'
+        except Exception:
+            next_run_str = 'N/A'
         lines.append(f"  • Job: `{job.name}`")
-        lines.append(f"    Next run: `{next_run}`")
+        lines.append(f"    Next run: `{next_run_str}`")
     
     if not jobs:
         lines.append("  ⚠️ No jobs scheduled for you!")
@@ -97,12 +101,16 @@ async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         
         if jobs:
             job = jobs[0]
-            next_run = job.next_t.strftime('%Y-%m-%d %H:%M:%S %Z') if job.next_t else 'N/A'
+            try:
+                next_run = getattr(job, 'next_t', None) or getattr(job.job, 'next_run_time', None)
+                next_run_str = next_run.strftime('%Y-%m-%d %H:%M:%S %Z') if next_run else 'Scheduled'
+            except Exception:
+                next_run_str = 'Scheduled'
             await update.message.reply_text(
                 f"✅ **Notification scheduled!**\n\n"
                 f"⏰ Time: `{user['notify_time']}`\n"
                 f"🌍 Timezone: `{user['timezone']}`\n"
-                f"📅 Next run: `{next_run}`",
+                f"📅 Next run: `{next_run_str}`",
                 parse_mode='Markdown'
             )
         else:

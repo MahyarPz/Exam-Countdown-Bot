@@ -113,9 +113,13 @@ def schedule_user_reminder(application: Application, user_id: int, notify_time_s
         )
         
         # Log next run time for debugging
-        if job and job.next_t:
-            logger.info(f"Scheduled daily reminder for user {user_id} at {notify_time_str} {timezone_str}. Next run: {job.next_t}")
-        else:
+        try:
+            next_run = getattr(job, 'next_t', None) or getattr(job.job, 'next_run_time', None)
+            if next_run:
+                logger.info(f"Scheduled daily reminder for user {user_id} at {notify_time_str} {timezone_str}. Next run: {next_run}")
+            else:
+                logger.info(f"Scheduled daily reminder for user {user_id} at {notify_time_str} {timezone_str}")
+        except Exception:
             logger.info(f"Scheduled daily reminder for user {user_id} at {notify_time_str} {timezone_str}")
 
 
