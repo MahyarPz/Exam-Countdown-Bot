@@ -22,6 +22,7 @@ from app.handlers import (
     cmd_settime,
     cmd_timezone,
     cmd_debug,
+    cmd_schedule,
     btn_delete_exam,
     btn_set_time,
     btn_set_timezone,
@@ -76,6 +77,7 @@ def main() -> None:
         application.add_handler(CommandHandler("settime", cmd_settime))
         application.add_handler(CommandHandler("timezone", cmd_timezone))
         application.add_handler(CommandHandler("debug", cmd_debug))
+        application.add_handler(CommandHandler("schedule", cmd_schedule))
         
         # Add button handlers (Reply Keyboard)
         application.add_handler(MessageHandler(

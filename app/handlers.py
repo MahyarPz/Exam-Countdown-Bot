@@ -13,7 +13,7 @@ from app.utils import (
     get_upcoming_exams_message
 )
 from app.keyboards import get_main_menu_keyboard, get_exam_list_inline_keyboard
-from app.scheduler import reschedule_user_reminder
+from app.scheduler import reschedule_user_reminder, ensure_user_scheduled
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +73,47 @@ async def cmd_debug(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     if not jobs:
         lines.append("  ⚠️ No jobs scheduled for you!")
-        lines.append("  Try: /start to reschedule")
+        lines.append("  Use /schedule to create one")
     
     await update.message.reply_text(
         "\n".join(lines),
         parse_mode='Markdown'
     )
+
+
+async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /schedule command - force create a scheduled job."""
+    user_id = update.effective_user.id
+    user = db.get_or_create_user(user_id)
+    
+    # Force reschedule
+    try:
+        reschedule_user_reminder(context.application, user_id)
+        
+        # Verify it was created
+        job_queue = context.application.job_queue
+        job_name = f"daily:{user_id}"
+        jobs = job_queue.get_jobs_by_name(job_name) if job_queue else []
+        
+        if jobs:
+            job = jobs[0]
+            next_run = job.next_t.strftime('%Y-%m-%d %H:%M:%S %Z') if job.next_t else 'N/A'
+            await update.message.reply_text(
+                f"✅ **Notification scheduled!**\n\n"
+                f"⏰ Time: `{user['notify_time']}`\n"
+                f"🌍 Timezone: `{user['timezone']}`\n"
+                f"📅 Next run: `{next_run}`",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                "❌ Failed to create job. Job queue might not be available."
+            )
+    except Exception as e:
+        logger.error(f"Error scheduling for user {user_id}: {e}", exc_info=True)
+        await update.message.reply_text(
+            f"❌ Error: {str(e)}"
+        )
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -173,6 +208,9 @@ async def cmd_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     user = db.get_or_create_user(user_id)
     exams = db.get_user_exams(user_id)
+    
+    # Ensure user has a scheduled job (in case Heroku dyno restarted)
+    ensure_user_scheduled(context.application, user_id)
     
     if not exams:
         await update.message.reply_text(
@@ -510,7 +548,12 @@ async def handle_time_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if normalized_time:
         user_id = update.effective_user.id
         db.update_user_notify_time(user_id, normalized_time)
-        reschedule_user_reminder(context.application, user_id)
+        
+        try:
+            reschedule_user_reminder(context.application, user_id)
+            logger.info(f"User {user_id} rescheduled notification to {normalized_time}")
+        except Exception as e:
+            logger.error(f"Failed to reschedule for user {user_id}: {e}")
         
         await update.message.reply_text(
             f"✅ Daily notification time set to {normalized_time}!",

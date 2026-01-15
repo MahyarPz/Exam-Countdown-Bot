@@ -130,6 +130,27 @@ def reschedule_user_reminder(application: Application, user_id: int) -> None:
     )
 
 
+def ensure_user_scheduled(application: Application, user_id: int) -> bool:
+    """
+    Check if user has a scheduled job, and create one if not.
+    Returns True if job exists or was created, False if failed.
+    """
+    job_queue = application.job_queue
+    if job_queue is None:
+        return False
+    
+    job_name = f"daily:{user_id}"
+    jobs = job_queue.get_jobs_by_name(job_name)
+    
+    if not jobs:
+        # No job exists, create one
+        logger.info(f"No job found for user {user_id}, creating one...")
+        reschedule_user_reminder(application, user_id)
+        return True
+    
+    return True
+
+
 def schedule_all_users(application: Application) -> None:
     """Schedule reminders for all users in the database."""
     users = db.get_all_users()
