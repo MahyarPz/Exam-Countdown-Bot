@@ -156,3 +156,30 @@ def get_exam_by_id(user_exam_id: int, user_id: int) -> Optional[Dict[str, Any]]:
         return exam
     
     return None
+
+
+def update_exam(user_exam_id: int, user_id: int, title: str = None, exam_datetime_iso: str = None) -> bool:
+    """Update an exam's title and/or datetime."""
+    db = get_firestore()
+    
+    try:
+        exam_ref = db.collection('users').document(str(user_id)).collection('exams').document(str(user_exam_id))
+        doc = exam_ref.get()
+        
+        if not doc.exists:
+            return False
+        
+        update_data = {}
+        if title is not None:
+            update_data['title'] = title
+        if exam_datetime_iso is not None:
+            update_data['exam_datetime_iso'] = exam_datetime_iso
+        
+        if update_data:
+            exam_ref.update(update_data)
+            logger.info(f"Updated exam {user_exam_id} for user {user_id}: {update_data}")
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error updating exam: {e}")
+        return False

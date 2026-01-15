@@ -8,9 +8,9 @@ def get_main_menu_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
     """Get the main menu Reply Keyboard."""
     keyboard = [
         ["➕ Add Exam", "📋 List Exams"],
-        ["🗑 Delete Exam", "⏰ Set Daily Time"],
-        ["🌍 Set Timezone", "💬 Feedback"],
-        ["ℹ️ Help"]
+        ["✏️ Edit Exam", "🗑 Delete Exam"],
+        ["⏰ Set Daily Time", "🌍 Set Timezone"],
+        ["💬 Feedback", "ℹ️ Help"]
     ]
     
     # Add admin buttons if user is admin
@@ -63,3 +63,45 @@ def get_cancel_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         one_time_keyboard=True
     )
+
+
+def get_exam_edit_inline_keyboard(exams: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
+    """
+    Get inline keyboard for selecting which exam to edit.
+    
+    Args:
+        exams: List of exam dictionaries
+    """
+    buttons = []
+    
+    # Add edit button for each exam (limit to first 10)
+    for exam in exams[:10]:
+        buttons.append([
+            InlineKeyboardButton(
+                f"✏️ #{exam['user_exam_id']} - {exam['title'][:30]}",
+                callback_data=f"edit:{exam['user_exam_id']}"
+            )
+        ])
+    
+    # Add cancel button
+    buttons.append([
+        InlineKeyboardButton("❌ Cancel", callback_data="edit_cancel")
+    ])
+    
+    return InlineKeyboardMarkup(buttons)
+
+
+def get_edit_field_keyboard(exam_id: int) -> InlineKeyboardMarkup:
+    """
+    Get inline keyboard for selecting which field to edit.
+    
+    Args:
+        exam_id: The exam ID to edit
+    """
+    buttons = [
+        [InlineKeyboardButton("📝 Edit Title", callback_data=f"editfield:{exam_id}:title")],
+        [InlineKeyboardButton("📅 Edit Date/Time", callback_data=f"editfield:{exam_id}:datetime")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="edit_cancel")]
+    ]
+    
+    return InlineKeyboardMarkup(buttons)

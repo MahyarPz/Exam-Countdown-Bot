@@ -417,3 +417,34 @@ def get_exam_by_id(user_exam_id: int, user_id: int) -> Optional[Dict[str, Any]]:
             )
         row = cursor.fetchone()
         return _dict_row(row) if row else None
+
+
+def update_exam(user_exam_id: int, user_id: int, title: str = None, exam_datetime_iso: str = None) -> bool:
+    """Update an exam's title and/or datetime (only if it belongs to the user)."""
+    if Config.use_firestore():
+        return firestore_db.update_exam(user_exam_id, user_id, title, exam_datetime_iso)
+    
+    # Build the SET clause dynamically
+    updates = []
+    params = []
+    
+    if title is not None:
+        updates.append("title = %s" if Config.use_postgres() else "title = ?")
+        params.append(title)
+    if exam_datetime_iso is not None:
+        updates.append("exam_datetime_iso = %s" if Config.use_postgres() else "exam_datetime_iso = ?")
+        params.append(exam_datetime_iso)
+    
+    if not updates:
+        return False
+    
+    params.extend([user_exam_id, user_id])
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if Config.use_postgres():
+            query = f"UPDATE exams SET {', '.join(updates)} WHERE user_exam_id = %s AND user_id = %s"
+        else:
+            query = f"UPDATE exams SET {', '.join(updates)} WHERE user_exam_id = ? AND user_id = ?"
+        cursor.execute(query, params)
+        return cursor.rowcount > 0

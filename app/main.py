@@ -40,6 +40,7 @@ from app.handlers import (
 )
 from app.conversations import get_add_exam_conversation_handler
 from app.feedback_handler import get_feedback_conversation_handler
+from app.edit_handler import get_edit_exam_conversation_handler
 from app.scheduler import schedule_all_users
 
 # Configure logging
@@ -69,6 +70,9 @@ def main() -> None:
         
         # Add conversation handler for Add Exam flow
         application.add_handler(get_add_exam_conversation_handler())
+        
+        # Add conversation handler for Edit Exam flow
+        application.add_handler(get_edit_exam_conversation_handler())
         
         # Add conversation handler for Feedback flow
         application.add_handler(get_feedback_conversation_handler())
