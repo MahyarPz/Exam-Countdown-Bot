@@ -98,9 +98,11 @@ def format_exam_countdown(exam_datetime_iso: str, user_timezone: str) -> Tuple[s
     tz = pytz.timezone(user_timezone)
     now = datetime.now(tz).replace(tzinfo=None)
     
-    # Calculate difference
-    delta = exam_dt - now
-    days = delta.days
+    # Calculate difference based on DATE only, not time
+    # This fixes the issue where an exam later today shows as "passed"
+    exam_date = exam_dt.date()
+    today_date = now.date()
+    days = (exam_date - today_date).days
     
     if days < 0:
         return "passed", days
