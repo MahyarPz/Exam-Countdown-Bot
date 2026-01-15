@@ -1,10 +1,12 @@
 """Command and callback handlers."""
 
 import logging
+import asyncio
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
 from app import db
+from app.config import Config
 from app.utils import (
     parse_exam_datetime,
     parse_time,
@@ -588,3 +590,70 @@ async def handle_timezone_input(update: Update, context: ContextTypes.DEFAULT_TY
         )
         logger.info(f"User {user_id} set timezone to {text}")
         return
+
+
+async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /broadcast command - Send a message to all users.
+    Only available to admin.
+    """
+    user_id = update.effective_user.id
+    
+    # Check if user is admin
+    if user_id != Config.ADMIN_ID:
+        await update.message.reply_text("⛔ This command is only available to the admin.")
+        return
+    
+    # Check if message is provided
+    if not context.args:
+        await update.message.reply_text(
+            "📢 **Broadcast Message**\n\n"
+            "Usage: `/broadcast Your message here`\n\n"
+            "This will send the message to ALL users.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Get the message
+    message_text = ' '.join(context.args)
+    
+    # Get all users
+    users = db.get_all_users()
+    
+    if not users:
+        await update.message.reply_text("⚠️ No users found in database.")
+        return
+    
+    # Send status message
+    status_msg = await update.message.reply_text(
+        f"📤 Sending message to {len(users)} users..."
+    )
+    
+    # Send to all users
+    success_count = 0
+    fail_count = 0
+    
+    for user in users:
+        try:
+            await context.bot.send_message(
+                chat_id=user['user_id'],
+                text=f"📢 **Announcement**\n\n{message_text}",
+                parse_mode='Markdown'
+            )
+            success_count += 1
+            # Small delay to avoid rate limiting
+            await asyncio.sleep(0.05)
+        except Exception as e:
+            fail_count += 1
+            logger.warning(f"Failed to send broadcast to {user['user_id']}: {e}")
+    
+    # Update status
+    await status_msg.edit_text(
+        f"✅ **Broadcast Complete!**\n\n"
+        f"📨 Sent: {success_count}\n"
+        f"❌ Failed: {fail_count}\n"
+        f"👥 Total: {len(users)}",
+        parse_mode='Markdown'
+    )
+    
+    logger.info(f"Admin {user_id} broadcasted message to {success_count}/{len(users)} users")
