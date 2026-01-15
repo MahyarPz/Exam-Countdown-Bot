@@ -1,9 +1,13 @@
 """Scheduler for daily exam reminders."""
 
 import logging
-from datetime import time
+from datetime import time, datetime, timedelta
 from telegram.ext import ContextTypes, Application
 import pytz
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
 from app import db
 from app.utils import get_upcoming_exams_message
 from app.config import Config
@@ -15,12 +19,16 @@ async def send_daily_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send daily reminder to a user."""
     user_id = context.job.data
     
+    logger.info(f"Running daily reminder job for user {user_id}")
+    
     try:
         # Get user info
         user = db.get_or_create_user(user_id)
         
         # Get user's exams
         exams = db.get_user_exams(user_id)
+        
+        logger.info(f"User {user_id} has {len(exams)} exams")
         
         # Generate message
         message = get_upcoming_exams_message(exams, user['timezone'])
@@ -32,10 +40,10 @@ async def send_daily_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
             )
             logger.info(f"Sent daily reminder to user {user_id}")
         else:
-            logger.debug(f"No upcoming exams for user {user_id}, skipping reminder")
+            logger.info(f"No upcoming exams for user {user_id}, skipping reminder")
     
     except Exception as e:
-        logger.error(f"Error sending daily reminder to user {user_id}: {e}")
+        logger.error(f"Error sending daily reminder to user {user_id}: {e}", exc_info=True)
 
 
 def schedule_user_reminder(application: Application, user_id: int, notify_time_str: str, timezone_str: str) -> None:
@@ -58,14 +66,24 @@ def schedule_user_reminder(application: Application, user_id: int, notify_time_s
     # Remove existing job if present
     current_jobs = job_queue.get_jobs_by_name(job_name)
     for job in current_jobs:
+        logger.info(f"Removing existing job for user {user_id}")
         job.schedule_removal()
     
     # Parse time
     hour, minute = map(int, notify_time_str.split(':'))
-    notify_time = time(hour=hour, minute=minute)
     
-    # Get timezone
-    tz = pytz.timezone(timezone_str)
+    # Use ZoneInfo for proper timezone handling with datetime.time
+    # ZoneInfo works correctly with datetime.time unlike pytz
+    try:
+        tz = ZoneInfo(timezone_str)
+    except Exception:
+        # Fallback to pytz if ZoneInfo fails
+        tz = pytz.timezone(timezone_str)
+    
+    # Create time with timezone info
+    notify_time = time(hour=hour, minute=minute, tzinfo=tz)
+    
+    logger.info(f"Scheduling reminder for user {user_id}: time={notify_time_str}, tz={timezone_str}, notify_time={notify_time}")
     
     # Schedule job
     if Config.DEBUG_FAST_SCHEDULE:
@@ -80,16 +98,20 @@ def schedule_user_reminder(application: Application, user_id: int, notify_time_s
         logger.info(f"Scheduled FAST reminder for user {user_id} every 60 seconds")
     else:
         # Normal: run daily at specified time
-        job_queue.run_daily(
+        job = job_queue.run_daily(
             send_daily_reminder,
             time=notify_time,
             days=(0, 1, 2, 3, 4, 5, 6),  # All days
             data=user_id,
             name=job_name,
-            chat_id=user_id,
-            tzinfo=tz
+            chat_id=user_id
         )
-        logger.info(f"Scheduled daily reminder for user {user_id} at {notify_time_str} {timezone_str}")
+        
+        # Log next run time for debugging
+        if job and job.next_t:
+            logger.info(f"Scheduled daily reminder for user {user_id} at {notify_time_str} {timezone_str}. Next run: {job.next_t}")
+        else:
+            logger.info(f"Scheduled daily reminder for user {user_id} at {notify_time_str} {timezone_str}")
 
 
 def reschedule_user_reminder(application: Application, user_id: int) -> None:
