@@ -159,6 +159,18 @@ def main() -> None:
         # Add handler for admin reply (must be before other text handlers)
         async def combined_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             """Handle text input - check admin reply first, then time/timezone."""
+            text = update.message.text
+            
+            # Skip menu button texts - let conversation handlers handle them
+            menu_buttons = [
+                "➕ Add Exam", "📋 List Exams", "🗑 Delete Exam",
+                "⏰ Set Daily Time", "🌍 Set Timezone", "ℹ️ Help",
+                "💬 Feedback", "❌ Cancel", "📢 Broadcast",
+                "🔧 Debug", "📅 Schedule", "📊 Stats", "✏️ Edit Exam"
+            ]
+            if text in menu_buttons:
+                return
+            
             # First check if it's an admin reply
             if await handle_admin_reply(update, context):
                 return
