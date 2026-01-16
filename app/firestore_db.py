@@ -103,11 +103,11 @@ def add_exam(user_id: int, title: str, exam_datetime_iso: str) -> int:
 
 
 def get_user_exams(user_id: int) -> List[Dict[str, Any]]:
-    """Get all exams for a user."""
+    """Get all exams for a user ordered by exam date."""
     db = get_firestore()
     exams = []
     
-    docs = db.collection('users').document(str(user_id)).collection('exams').order_by('user_exam_id').stream()
+    docs = db.collection('users').document(str(user_id)).collection('exams').order_by('exam_datetime_iso').stream()
     
     for doc in docs:
         exam = doc.to_dict()

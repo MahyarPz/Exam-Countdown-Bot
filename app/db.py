@@ -350,12 +350,12 @@ def get_user_exams(user_id: int) -> List[Dict[str, Any]]:
         cursor = conn.cursor()
         if Config.use_postgres():
             cursor.execute(
-                "SELECT * FROM exams WHERE user_id = %s ORDER BY user_exam_id",
+                "SELECT * FROM exams WHERE user_id = %s ORDER BY exam_datetime_iso",
                 (user_id,),
             )
         else:
             cursor.execute(
-                "SELECT * FROM exams WHERE user_id = ? ORDER BY user_exam_id",
+                "SELECT * FROM exams WHERE user_id = ? ORDER BY exam_datetime_iso",
                 (user_id,),
             )
         return [_dict_row(row) for row in cursor.fetchall()]
