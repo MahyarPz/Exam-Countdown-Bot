@@ -68,6 +68,8 @@ def init_db() -> None:
                     """
                     CREATE TABLE IF NOT EXISTS users (
                         user_id BIGINT PRIMARY KEY,
+                        first_name VARCHAR(255),
+                        username VARCHAR(255),
                         timezone VARCHAR(100) NOT NULL DEFAULT 'Europe/Rome',
                         notify_time VARCHAR(5) NOT NULL DEFAULT '09:00'
                     )
@@ -91,6 +93,8 @@ def init_db() -> None:
                     """
                     CREATE TABLE IF NOT EXISTS users (
                         user_id INTEGER PRIMARY KEY,
+                        first_name TEXT,
+                        username TEXT,
                         timezone TEXT NOT NULL DEFAULT 'Europe/Rome',
                         notify_time TEXT NOT NULL DEFAULT '09:00'
                     )
@@ -114,6 +118,11 @@ def init_db() -> None:
                 _ensure_user_exam_id(conn, cursor)
             except Exception as e:
                 logger.error(f"Error in _ensure_user_exam_id: {e}. Continuing anyway.")
+            
+            try:
+                _ensure_user_info_columns(conn, cursor)
+            except Exception as e:
+                logger.error(f"Error in _ensure_user_info_columns: {e}. Continuing anyway.")
                 conn.rollback()
 
 
@@ -172,6 +181,35 @@ def _ensure_user_exam_id(conn: Any, cursor: Any) -> None:
     
     except Exception as e:
         logger.error(f"Error in _ensure_user_exam_id: {e}")
+        conn.rollback()
+        raise
+
+
+def _ensure_user_info_columns(conn: Any, cursor: Any) -> None:
+    """Ensure first_name and username columns exist in users table."""
+    try:
+        # Check and add first_name column
+        if not _has_column(cursor, "users", "first_name"):
+            logger.info("Adding first_name column to users table...")
+            if Config.use_postgres():
+                cursor.execute("ALTER TABLE users ADD COLUMN first_name VARCHAR(255)")
+            else:
+                cursor.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
+            conn.commit()
+        
+        # Check and add username column
+        if not _has_column(cursor, "users", "username"):
+            logger.info("Adding username column to users table...")
+            if Config.use_postgres():
+                cursor.execute("ALTER TABLE users ADD COLUMN username VARCHAR(255)")
+            else:
+                cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
+            conn.commit()
+        
+        logger.info("User info columns migration completed successfully")
+    
+    except Exception as e:
+        logger.error(f"Error in _ensure_user_info_columns: {e}")
         conn.rollback()
         raise
 
@@ -242,10 +280,10 @@ def _next_user_exam_id(cursor: Any, user_id: int) -> int:
     return int(row[0] if not isinstance(row, dict) else list(row.values())[0])
 
 
-def get_or_create_user(user_id: int) -> Dict[str, Any]:
-    """Return user row; create with defaults if missing."""
+def get_or_create_user(user_id: int, first_name: str = None, username: str = None) -> Dict[str, Any]:
+    """Return user row; create with defaults if missing. Updates name/username if provided."""
     if Config.use_firestore():
-        return firestore_db.get_or_create_user(user_id)
+        return firestore_db.get_or_create_user(user_id, first_name, username)
     
     # Existing SQLite/PostgreSQL code
     with get_db() as conn:
@@ -255,8 +293,16 @@ def get_or_create_user(user_id: int) -> Dict[str, Any]:
             user = cursor.fetchone()
             if not user:
                 cursor.execute(
-                    "INSERT INTO users (user_id, timezone, notify_time) VALUES (%s, %s, %s)",
-                    (user_id, Config.DEFAULT_TIMEZONE, Config.DEFAULT_NOTIFY_TIME),
+                    "INSERT INTO users (user_id, first_name, username, timezone, notify_time) VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, first_name, username, Config.DEFAULT_TIMEZONE, Config.DEFAULT_NOTIFY_TIME),
+                )
+                cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+                user = cursor.fetchone()
+            elif first_name or username:
+                # Update existing user's info
+                cursor.execute(
+                    "UPDATE users SET first_name = COALESCE(%s, first_name), username = COALESCE(%s, username) WHERE user_id = %s",
+                    (first_name, username, user_id),
                 )
                 cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
                 user = cursor.fetchone()
@@ -265,8 +311,16 @@ def get_or_create_user(user_id: int) -> Dict[str, Any]:
             user = cursor.fetchone()
             if not user:
                 cursor.execute(
-                    "INSERT INTO users (user_id, timezone, notify_time) VALUES (?, ?, ?)",
-                    (user_id, Config.DEFAULT_TIMEZONE, Config.DEFAULT_NOTIFY_TIME),
+                    "INSERT INTO users (user_id, first_name, username, timezone, notify_time) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, first_name, username, Config.DEFAULT_TIMEZONE, Config.DEFAULT_NOTIFY_TIME),
+                )
+                cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+                user = cursor.fetchone()
+            elif first_name or username:
+                # Update existing user's info
+                cursor.execute(
+                    "UPDATE users SET first_name = COALESCE(?, first_name), username = COALESCE(?, username) WHERE user_id = ?",
+                    (first_name, username, user_id),
                 )
                 cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
                 user = cursor.fetchone()

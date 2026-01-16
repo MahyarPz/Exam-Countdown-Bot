@@ -28,7 +28,9 @@ def is_admin(user_id: int) -> bool:
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command."""
     user_id = update.effective_user.id
-    user = db.get_or_create_user(user_id)
+    first_name = update.effective_user.first_name
+    username = update.effective_user.username
+    user = db.get_or_create_user(user_id, first_name, username)
     
     # Schedule daily reminder for this user
     reschedule_user_reminder(context.application, user_id)
@@ -43,7 +45,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         welcome_text,
         reply_markup=get_main_menu_keyboard(is_admin(user_id))
     )
-    logger.info(f"User {user_id} started the bot")
+    logger.info(f"User {user_id} ({first_name}) started the bot")
 
 
 async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -689,12 +691,20 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             users_with_exams += 1
             total_exams += len(exams)
     
+    # Build user list (last 10 users)
+    user_list = ""
+    for user in users[-10:]:
+        name = user.get('first_name') or 'Unknown'
+        uname = f"@{user.get('username')}" if user.get('username') else 'no username'
+        user_list += f"  • {name} ({uname}) - `{user['user_id']}`\n"
+    
     await update.message.reply_text(
         f"📊 **Bot Statistics**\n\n"
         f"👥 Total Users: `{len(users)}`\n"
         f"📝 Total Exams: `{total_exams}`\n"
         f"📚 Users with Exams: `{users_with_exams}`\n"
-        f"💤 Inactive Users: `{len(users) - users_with_exams}`",
+        f"💤 Inactive Users: `{len(users) - users_with_exams}`\n\n"
+        f"👤 **Recent Users:**\n{user_list}",
         parse_mode='Markdown'
     )
 

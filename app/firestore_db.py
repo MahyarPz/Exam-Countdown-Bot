@@ -38,22 +38,35 @@ def get_firestore() -> Any:
     return _db
 
 
-def get_or_create_user(user_id: int) -> Dict[str, Any]:
-    """Get user or create with defaults."""
+def get_or_create_user(user_id: int, first_name: str = None, username: str = None) -> Dict[str, Any]:
+    """Get user or create with defaults. Updates name/username if provided."""
     db = get_firestore()
     user_ref = db.collection('users').document(str(user_id))
     user_doc = user_ref.get()
     
     if user_doc.exists:
-        return user_doc.to_dict()
+        user_data = user_doc.to_dict()
+        # Update name/username if provided and different
+        updates = {}
+        if first_name and user_data.get('first_name') != first_name:
+            updates['first_name'] = first_name
+        if username and user_data.get('username') != username:
+            updates['username'] = username
+        if updates:
+            user_ref.update(updates)
+            user_data.update(updates)
+            logger.info(f"Updated user info for {user_id}: {updates}")
+        return user_data
     else:
         user_data = {
             'user_id': user_id,
+            'first_name': first_name,
+            'username': username,
             'timezone': Config.DEFAULT_TIMEZONE,
             'notify_time': Config.DEFAULT_NOTIFY_TIME
         }
         user_ref.set(user_data)
-        logger.info(f"Created new user: {user_id}")
+        logger.info(f"Created new user: {user_id} ({first_name})")
         return user_data
 
 
