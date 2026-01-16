@@ -118,10 +118,7 @@ def main() -> None:
             filters.Regex("^ℹ️ Help$"),
             cmd_help
         ))
-        application.add_handler(MessageHandler(
-            filters.Regex("^💬 Feedback$"),
-            lambda u, c: None  # Handled by conversation handler
-        ))
+        # Note: "💬 Feedback" is handled by get_feedback_conversation_handler()
         
         # Admin button handlers
         application.add_handler(MessageHandler(
