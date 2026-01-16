@@ -94,9 +94,9 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         logger.info(f"Feedback from user {user.id} ({user.first_name}): {feedback_text[:50]}...")
         
     except Exception as e:
-        logger.error(f"Error sending feedback to admin {admin_id}: {e}")
+        logger.error(f"Error sending feedback to admin {admin_id}: {e}", exc_info=True)
         await update.message.reply_text(
-            "❌ Error sending feedback. Please try again.",
+            f"❌ Error sending feedback. Please try again.\n\nDebug: {str(e)[:100]}",
             reply_markup=get_main_menu_keyboard()
         )
     
