@@ -61,13 +61,14 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
         return ConversationHandler.END
     
-    # Format message for admin
+    # Format message for admin (using HTML for better compatibility)
+    username_display = f"@{user.username}" if user.username else "N/A"
     admin_message = (
-        f"📨 **New Feedback:**\n\n"
+        f"📨 <b>New Feedback:</b>\n\n"
         f"👤 Name: {user.first_name} {user.last_name or ''}\n"
-        f"🆔 User ID: {user.id}\n"
-        f"📱 Username: @{user.username or 'N/A'}\n\n"
-        f"💬 **Message:**\n{feedback_text}"
+        f"🆔 User ID: <code>{user.id}</code>\n"
+        f"📱 Username: {username_display}\n\n"
+        f"💬 <b>Message:</b>\n{feedback_text}"
     )
     
     # Create reply button
@@ -79,7 +80,7 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await context.bot.send_message(
             chat_id=admin_id,
             text=admin_message,
-            parse_mode='Markdown',
+            parse_mode='HTML',
             reply_markup=reply_keyboard
         )
         
@@ -96,7 +97,7 @@ async def receive_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     except Exception as e:
         logger.error(f"Error sending feedback to admin {admin_id}: {e}", exc_info=True)
         await update.message.reply_text(
-            f"❌ Error sending feedback. Please try again.\n\nDebug: {str(e)[:100]}",
+            "❌ Error sending feedback. Please try again.",
             reply_markup=get_main_menu_keyboard()
         )
     
